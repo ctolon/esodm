@@ -1,0 +1,9 @@
+/artifacts/
+/bin/
+**/target/
+**/.venv*/
+**/__pycache__/
+*.test
+coverage.out
+
+/extra_docs/

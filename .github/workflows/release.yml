@@ -1,0 +1,57 @@
+name: release draft
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Validate tag, notes and ancestry
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          [[ "$RELEASE_REF" == refs/tags/* ]] || { echo 'Run this workflow on a release tag.' >&2; exit 1; }
+          python3 scripts/release_notes.py "$RELEASE_TAG" > /dev/null
+          git merge-base --is-ancestor HEAD origin/main
+  verify:
+    needs: candidate
+    uses: ./.github/workflows/ci.yml
+  extended:
+    needs: candidate
+    uses: ./.github/workflows/release-verification.yml
+  draft:
+    needs: [candidate, verify, extended]
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build source archive and checksum
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 scripts/release_notes.py "$RELEASE_TAG" > release-notes.md
+          git archive --format=tar.gz --prefix="esodm-${RELEASE_TAG}/" -o "esodm-${RELEASE_TAG}.tar.gz" HEAD
+          sha256sum "esodm-${RELEASE_TAG}.tar.gz" > SHA256SUMS
+      - name: Create or update draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/draft_release.sh

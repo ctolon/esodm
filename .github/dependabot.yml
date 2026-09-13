@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      elastic-clients:
+        patterns: ["github.com/elastic/*"]
+      go-dependencies:
+        patterns: ["*"]
+        exclude-patterns: ["github.com/elastic/*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

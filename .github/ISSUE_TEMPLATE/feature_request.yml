@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose a concrete use case or API improvement.
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and use case
+      description: Describe the application behavior that is difficult or impossible today.
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: Proposed API and example
+      description: Show intended usage, error behavior and concurrency expectations.
+    validations:
+      required: true
+  - type: textarea
+    id: official
+    attributes:
+      label: Official client support and alternatives
+      description: Link the official Elasticsearch API or Go client types when available. Explain why DoTyped or existing helpers are insufficient.
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and validation
+      description: Identify required server versions or licenses and a testable acceptance criterion.

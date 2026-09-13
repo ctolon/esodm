@@ -1,0 +1,41 @@
+name: Bug report
+description: Report a reproducible defect in esodm.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: For security vulnerabilities, follow SECURITY.md instead of opening a public issue. Remove credentials and private documents from examples.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: esodm tag or commit, Go version, Elasticsearch server and client major.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include model, mapping, request and the commands needed to reproduce.
+      render: go
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include sanitized error status and output. For bulk failures, include affected item outcomes.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and frequency
+      description: OS, architecture, routing, concurrency, retry policy and whether the failure is intermittent.

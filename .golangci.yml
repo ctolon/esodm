@@ -1,0 +1,22 @@
+version: "2"
+run:
+  timeout: 10m
+  concurrency: 2
+  modules-download-mode: readonly
+linters:
+  default: none
+  enable:
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - errcheck
+  settings:
+    staticcheck:
+      # QF1001 is a stylistic rewrite; validators retain their explicit grouping.
+      checks: ["all", "-QF1001"]
+  exclusions:
+    rules:
+      # Test fixtures deliberately discard setup/cleanup and assertion helper errors.
+      - path: _test\.go$
+        linters: [errcheck]

@@ -1,0 +1,206 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  schedule:
+    - cron: '17 2 * * 1'
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  GOFLAGS: -p=1
+  GOMAXPROCS: 2
+  GOMEMLIMIT: 3GiB
+jobs:
+  unit:
+    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.26.0', '1.27.0']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ matrix.go }}
+      - run: go test -race -count=1 -coverprofile=coverage.out ./...
+      - run: go vet ./...
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: coverage-${{ matrix.go }}
+          path: coverage.out
+  portability:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.0'
+      - run: go build ./...
+      - run: go test -count=1 ./...
+  secure-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        major: [8, 9]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.0'
+      - run: python3 scripts/secure.py --major ${{ matrix.major }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: secure-es${{ matrix.major }}
+          path: |
+            artifacts/secure/*.log
+            artifacts/secure/*.json
+  quality:
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.0'
+      - run: go mod verify
+      - run: go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+      - run: GOBIN="$PWD/bin" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+      - run: bin/golangci-lint run ./...
+      - run: bin/golangci-lint run --build-tags integration ./...
+      - run: test -z "$(gofmt -l .)"
+      - run: go generate ./examples/...
+      - run: go run ./internal/docgen -check
+      - run: python3 scripts/docs.py
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Check generated files
+        run: |
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"
+      - run: python3 scripts/verify.py --security
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: quality-evidence
+          path: artifacts/verification/
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.26.0', '1.27.0']
+        es:
+          - {major: 8, version: '8.18.1', image: 'docker.elastic.co/elasticsearch/elasticsearch:8.18.1@sha256:e0dd6421674d6b28224ca38cb9a19e79c1f365361e3e5b295cb87eca7ecfdad9'}
+          - {major: 8, version: '8.19.7', image: 'docker.elastic.co/elasticsearch/elasticsearch:8.19.7@sha256:655d2801fa29bdb75c7d7862f32897f74b51ce5c7e0c1fa9ef3f5f40b07a8c88'}
+          - {major: 9, version: '9.4.5', image: 'docker.elastic.co/elasticsearch/elasticsearch:9.4.5@sha256:b146294881f6bf3961a1d9e952ad5751f68fe0cc816d7e9b8ebf4891fddd9d05'}
+          - {major: 9, version: '9.5.2', image: 'docker.elastic.co/elasticsearch/elasticsearch:9.5.2@sha256:9c1e1afc2bda921b35025e21c72ec6e392266995aa35ad6a47887363592718be'}
+    services:
+      elasticsearch:
+        image: ${{ matrix.es.image }}
+        ports: ['9200:9200']
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: 'false'
+          xpack.license.self_generated.type: trial
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+          cluster.routing.allocation.disk.watermark.low: 2gb
+          cluster.routing.allocation.disk.watermark.high: 1gb
+          cluster.routing.allocation.disk.watermark.flood_stage: 512mb
+        options: >-
+          --memory=2g --cpus=2
+          --health-cmd="curl -fsS http://localhost:9200/_cluster/health"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ matrix.go }}
+      - run: go test -race -tags integration -timeout 5m -json ./integration -args -es-url http://localhost:9200 -es-major ${{ matrix.es.major }} -es-licensed > integration.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: integration-${{ matrix.go }}-${{ matrix.es.version }}
+          path: integration.json
+  fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [FuzzTag, FuzzQuery, FuzzCodec, FuzzResponse, FuzzCursor, FuzzBulk, FuzzSchema, FuzzBulkResponse, FuzzFacets, FuzzMigrationCheckpoint]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.0'
+      - run: python3 scripts/fuzz.py --target ${{ matrix.target }} --duration ${{ github.event_name == 'schedule' && '10m' || '30s' }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: fuzz-${{ matrix.target }}
+          path: |
+            artifacts/fuzz/
+            testdata/fuzz/
+  documentation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.0'
+      - run: go run ./internal/docgen -check
+      - run: python3 scripts/docs.py
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - run: actionlint -color
+  checks:
+    name: CI checks
+    if: always()
+    needs: [unit, portability, quality, documentation, integration, secure-integration, fuzz]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every check to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYCODE'
+          import json, os, sys
+          failed = {name: job['result'] for name, job in json.loads(os.environ['RESULTS']).items() if job['result'] != 'success'}
+          if failed:
+              print(f"Required checks did not pass: {failed}", file=sys.stderr)
+              sys.exit(1)
+          PYCODE

@@ -1,0 +1,55 @@
+name: release verification
+on:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+env:
+  GOFLAGS: -p=1
+  GOMAXPROCS: 2
+  GOMEMLIMIT: 3GiB
+jobs:
+  extended-fuzz:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [FuzzTag, FuzzQuery, FuzzCodec, FuzzResponse, FuzzCursor, FuzzBulk, FuzzSchema, FuzzBulkResponse, FuzzFacets, FuzzMigrationCheckpoint]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.0'
+      - run: python3 scripts/fuzz.py --target ${{ matrix.target }} --duration 60m
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: release-fuzz-${{ matrix.target }}
+          path: |
+            artifacts/fuzz/
+            testdata/fuzz/
+  endurance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      matrix:
+        major: [8, 9]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.27.0'
+      - run: docker compose up -d --wait es${{ matrix.major }}
+      - run: go test -race -tags integration -timeout 130m -json -run '^TestSoak$' ./integration -args -es-url http://localhost:192${{ matrix.major }}0 -es-major ${{ matrix.major }} -es-soak 2h > soak.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: release-soak-es${{ matrix.major }}
+          path: soak.json
+      - if: always()
+        run: docker compose down
