@@ -114,8 +114,22 @@ func TestSoak(t *testing.T) {
 		}(worker)
 	}
 	wg.Wait()
-	if after := openSearchContexts(t, c); after > baseline {
+	if after := drainContexts(t, c, baseline); after > baseline {
 		t.Fatalf("PIT contexts leaked: before=%d after=%d", baseline, after)
+	}
+}
+
+// drainContexts waits out the one-minute PIT keep-alive so in-flight contexts
+// opened just before cancellation can expire. Persistent leaks still fail.
+func drainContexts(t *testing.T, c *esodm.Client, baseline int64) int64 {
+	t.Helper()
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		after := openSearchContexts(t, c)
+		if after <= baseline || time.Now().After(deadline) {
+			return after
+		}
+		time.Sleep(5 * time.Second)
 	}
 }
 
