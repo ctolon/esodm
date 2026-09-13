@@ -24,7 +24,7 @@ jobs:
         with:
           go-version: '1.27.0'
       - run: python3 scripts/fuzz.py --target ${{ matrix.target }} --duration 60m
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: release-fuzz-${{ matrix.target }}
@@ -46,7 +46,7 @@ jobs:
           go-version: '1.27.0'
       - run: docker compose up -d --wait es${{ matrix.major }}
       - run: go test -race -tags integration -timeout 130m -json -run '^TestSoak$' ./integration -args -es-url http://localhost:192${{ matrix.major }}0 -es-major ${{ matrix.major }} -es-soak 2h > soak.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: release-soak-es${{ matrix.major }}
