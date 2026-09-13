@@ -34,7 +34,7 @@ jobs:
           go-version: ${{ matrix.go }}
       - run: go test -race -count=1 -coverprofile=coverage.out ./...
       - run: go vet ./...
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: coverage-${{ matrix.go }}
@@ -70,7 +70,7 @@ jobs:
         with:
           go-version: '1.27.0'
       - run: python3 scripts/secure.py --major ${{ matrix.major }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: secure-es${{ matrix.major }}
@@ -103,7 +103,7 @@ jobs:
           git diff --exit-code
           test -z "$(git ls-files --others --exclude-standard)"
       - run: python3 scripts/verify.py --security
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: quality-evidence
@@ -144,7 +144,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - run: go test -race -tags integration -timeout 5m -json ./integration -args -es-url http://localhost:9200 -es-major ${{ matrix.es.major }} -es-licensed > integration.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: integration-${{ matrix.go }}-${{ matrix.es.version }}
@@ -164,7 +164,7 @@ jobs:
         with:
           go-version: '1.27.0'
       - run: python3 scripts/fuzz.py --target ${{ matrix.target }} --duration ${{ github.event_name == 'schedule' && '10m' || '30s' }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: fuzz-${{ matrix.target }}
