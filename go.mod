@@ -3,9 +3,9 @@ module github.com/ctolon/esodm
 go 1.26.0
 
 require (
-	github.com/elastic/elastic-transport-go/v8 v8.9.0
+	github.com/elastic/elastic-transport-go/v8 v8.11.0
 	github.com/elastic/go-elasticsearch/v8 v8.19.7
-	github.com/elastic/go-elasticsearch/v9 v9.5.2
+	github.com/elastic/go-elasticsearch/v9 v9.5.3
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/metric v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
